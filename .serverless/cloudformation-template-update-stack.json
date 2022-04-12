@@ -1,0 +1,249 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "The AWS CloudFormation template for this Serverless application",
+  "Resources": {
+    "ServerlessDeploymentBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LoadGeneratorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/serverless-artillery-xUustkNXvz-stress3-loadGenerator"
+      }
+    },
+    "IamRoleLambdaExecution": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "-",
+                [
+                  "stress3",
+                  "serverless-artillery-xUustkNXvz",
+                  "lambda"
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/serverless-artillery-xUustkNXvz-stress3-loadGenerator:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/serverless-artillery-xUustkNXvz-stress3-loadGenerator:*:*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      ":",
+                      [
+                        "arn:aws:lambda",
+                        {
+                          "Ref": "AWS::Region"
+                        },
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        "function",
+                        "serverless-artillery-xUustkNXvz-stress3-loadGenerator*"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "monitoringAlerts"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/",
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "serverless-artillery-xUustkNXvz",
+              "stress3",
+              "us-east-1",
+              "lambdaRole"
+            ]
+          ]
+        }
+      }
+    },
+    "LoadGeneratorLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ServerlessDeploymentBucket"
+          },
+          "S3Key": "serverless/serverless-artillery-xUustkNXvz/stress3/1649573086568-2022-04-10T06:44:46.568Z/serverless-artillery-xUustkNXvz.zip"
+        },
+        "FunctionName": "serverless-artillery-xUustkNXvz-stress3-loadGenerator",
+        "Handler": "handler.handler",
+        "MemorySize": 1024,
+        "Role": {
+          "Fn::GetAtt": [
+            "IamRoleLambdaExecution",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs14.x",
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "TOPIC_ARN": {
+              "Ref": "monitoringAlerts"
+            },
+            "TOPIC_NAME": {
+              "Fn::GetAtt": [
+                "monitoringAlerts",
+                "TopicName"
+              ]
+            }
+          }
+        }
+      },
+      "DependsOn": [
+        "LoadGeneratorLogGroup",
+        "IamRoleLambdaExecution"
+      ]
+    },
+    "LoadGeneratorLambdaVersionR4XqIZqsvCOdmr6jzm6HIoM4Vs8ydvnLJxpjL1cQ3QE": {
+      "Type": "AWS::Lambda::Version",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "LoadGeneratorLambdaFunction"
+        },
+        "CodeSha256": "H/noCon3XdV0qyjiVmp/wscACCyCllSeW1VtQ4alnGc="
+      }
+    },
+    "LoadGeneratorEventsRuleSchedule1": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "DISABLED",
+        "Name": "serverless-artillery-xUustkNXvz-stress3-monitoring",
+        "Description": "The scheduled event for running the function in monitoring mode",
+        "Targets": [
+          {
+            "Input": "{\">>\":\"script.yml\",\"mode\":\"monitoring\"}",
+            "Arn": {
+              "Fn::GetAtt": [
+                "LoadGeneratorLambdaFunction",
+                "Arn"
+              ]
+            },
+            "Id": "loadGeneratorSchedule"
+          }
+        ]
+      }
+    },
+    "LoadGeneratorLambdaPermissionEventsRuleSchedule1": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "LoadGeneratorLambdaFunction",
+            "Arn"
+          ]
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": {
+          "Fn::Join": [
+            "",
+            [
+              "events.",
+              {
+                "Ref": "AWS::URLSuffix"
+              }
+            ]
+          ]
+        },
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "LoadGeneratorEventsRuleSchedule1",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "monitoringAlerts": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "serverless-artillery-xUustkNXvz Monitoring Alerts"
+      }
+    }
+  },
+  "Outputs": {
+    "ServerlessDeploymentBucketName": {
+      "Value": {
+        "Ref": "ServerlessDeploymentBucket"
+      }
+    },
+    "LoadGeneratorLambdaFunctionQualifiedArn": {
+      "Description": "Current Lambda function version",
+      "Value": {
+        "Ref": "LoadGeneratorLambdaVersionR4XqIZqsvCOdmr6jzm6HIoM4Vs8ydvnLJxpjL1cQ3QE"
+      }
+    }
+  }
+}
